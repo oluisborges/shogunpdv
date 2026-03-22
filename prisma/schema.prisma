@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── MULTI-TENANT ────────────────────────────────────────────────────────────
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  phone       String?
+  address     String?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users      UserTenant[]
+  categories Category[]
+  products   Product[]
+  orders     Order[]
+  inventory  InventoryItem[]
+  channels   Channel[]
+
+  @@map("tenants")
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenants  UserTenant[]
+  accounts Account[]
+  sessions Session[]
+  orders   Order[]     @relation("CreatedByUser")
+
+  @@map("users")
+}
+
+model UserTenant {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  role     Role   @default(OPERATOR)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@map("user_tenants")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  OPERATOR
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── CARDÁPIO ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id       String  @id @default(cuid())
+  name     String
+  position Int     @default(0)
+  active   Boolean @default(true)
+
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?
+  basePrice   Float
+  active      Boolean @default(true)
+  position    Int     @default(0)
+
+  tenantId   String
+  categoryId String?
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category   Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants   ProductVariant[]
+  inventory  InventoryItem?
+  orderItems OrderItem[]
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  name      String
+  groupName String
+  price     Float   @default(0)
+  active    Boolean @default(true)
+
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@map("product_variants")
+}
+
+// ─── ESTOQUE ──────────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id         String  @id @default(cuid())
+  quantity   Int     @default(0)
+  minAlert   Int     @default(5)
+  trackStock Boolean @default(true)
+
+  productId String @unique
+  tenantId  String
+
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stockMovements StockMovement[]
+
+  @@map("inventory_items")
+}
+
+model StockMovement {
+  id        String       @id @default(cuid())
+  type      MovementType
+  quantity  Int
+  reason    String?
+  createdAt DateTime     @default(now())
+
+  inventoryItemId String
+  orderId         String?
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  order         Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@map("stock_movements")
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUST
+}
+
+// ─── PEDIDOS ──────────────────────────────────────────────────────────────────
+
+model Order {
+  id          String       @id @default(cuid())
+  number      Int
+  status      OrderStatus  @default(PENDING)
+  channel     OrderChannel
+  totalAmount Float
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  customerName    String?
+  customerPhone   String?
+  customerAddress String?
+
+  tenantId    String
+  createdById String?
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy  User?           @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: SetNull)
+  items      OrderItem[]
+  movements  StockMovement[]
+
+  @@unique([tenantId, number])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  quantity  Int
+  unitPrice Float
+  notes     String?
+
+  orderId   String
+  productId String
+  variantId String?
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderChannel {
+  STOREFRONT
+  COUNTER
+  WHATSAPP
+  EXTERNAL
+}
+
+// ─── CANAIS DE VENDA ──────────────────────────────────────────────────────────
+
+model Channel {
+  id      String       @id @default(cuid())
+  type    OrderChannel
+  name    String
+  active  Boolean      @default(true)
+  config  Json?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("channels")
+}
