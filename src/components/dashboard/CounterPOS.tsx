@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Category, Product, ProductVariant, InventoryItem } from "@prisma/client";
-import { formatCurrency } from "@/lib/tenant";
+import { formatCurrency } from "@/lib/utils";
 import type { CartItem } from "@/types";
 
 type ProductFull = Product & {

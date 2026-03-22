@@ -8,7 +8,7 @@ import {
   ORDER_CHANNEL_LABELS,
 } from "@/types";
 import type { OrderStatus } from "@prisma/client";
-import { formatCurrency } from "@/lib/tenant";
+import { formatCurrency } from "@/lib/utils";
 
 const STATUS_FLOW: OrderStatus[] = [
   "PENDING",
