@@ -1,12 +1,12 @@
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
  * Retorna o tenant ativo para o usuário autenticado.
- * Usa o primeiro tenant do usuário (pode ser expandido para multi-tenant switching).
  */
 export async function getCurrentTenant() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) return null;
 
   const userTenant = await prisma.userTenant.findFirst({
@@ -18,10 +18,10 @@ export async function getCurrentTenant() {
 }
 
 /**
- * Retorna o tenant e o role do usuário naquele tenant.
+ * Retorna o tenant e o role do usuário.
  */
 export async function getCurrentTenantWithRole() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) return null;
 
   const userTenant = await prisma.userTenant.findFirst({

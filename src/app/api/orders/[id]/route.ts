@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 import { updateOrderStatusSchema } from "@/lib/validations";
 import { notifyTenant } from "@/app/api/sse/route";
@@ -10,7 +11,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -23,7 +24,6 @@ export async function PATCH(
   const order = await prisma.order.findFirst({
     where: { id, tenantId: tenant.id },
   });
-
   if (!order) {
     return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
   }
@@ -42,11 +42,9 @@ export async function PATCH(
       },
     });
 
-    // Quando confirmar pedido, decrementar estoque
+    // Decrementar estoque ao confirmar pedido
     if (status === "CONFIRMED" && order.status === "PENDING") {
-      const items = await tx.orderItem.findMany({
-        where: { orderId: id },
-      });
+      const items = await tx.orderItem.findMany({ where: { orderId: id } });
 
       for (const item of items) {
         const inventory = await tx.inventoryItem.findUnique({
@@ -75,7 +73,6 @@ export async function PATCH(
     return updatedOrder;
   });
 
-  // Notificar em tempo real
   notifyTenant(tenant.id, { type: "ORDER_UPDATED", order: updated });
 
   return NextResponse.json(updated);

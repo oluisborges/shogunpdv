@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 
 export async function GET() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -14,7 +15,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();

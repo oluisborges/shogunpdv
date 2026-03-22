@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 import { createProductSchema } from "@/lib/validations";
 
-// GET /api/products — listar produtos do tenant
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get("slug");
@@ -12,13 +12,11 @@ export async function GET(req: NextRequest) {
   let tenantId: string;
 
   if (slug) {
-    // Público: storefront acessa por slug
     const tenant = await prisma.tenant.findUnique({ where: { slug } });
     if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
     tenantId = tenant.id;
   } else {
-    // Privado: operador autenticado
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const tenant = await getCurrentTenant();
     if (!tenant) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
@@ -32,15 +30,14 @@ export async function GET(req: NextRequest) {
       variants: { where: { active: true } },
       inventory: true,
     },
-    orderBy: [{ category: { position: "asc" } }, { position: "asc" }],
+    orderBy: [{ position: "asc" }],
   });
 
   return NextResponse.json(products);
 }
 
-// POST /api/products — criar produto
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -68,14 +65,9 @@ export async function POST(req: NextRequest) {
             }
           : undefined,
       },
-      include: {
-        variants: true,
-        inventory: true,
-        category: true,
-      },
+      include: { variants: true, inventory: true, category: true },
     });
 
-    // Criar item de estoque
     await tx.inventoryItem.create({
       data: {
         productId: p.id,

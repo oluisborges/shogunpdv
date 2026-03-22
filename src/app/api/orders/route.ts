@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { getCurrentTenant, getNextOrderNumber } from "@/lib/tenant";
 import { createOrderSchema } from "@/lib/validations";
 import { notifyTenant } from "@/app/api/sse/route";
 
 // GET /api/orders — listar pedidos do tenant
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -15,12 +16,10 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
-  const date = searchParams.get("date"); // YYYY-MM-DD
+  const date = searchParams.get("date");
 
   const where: Record<string, unknown> = { tenantId: tenant.id };
-
   if (status) where.status = status;
-
   if (date) {
     const start = new Date(`${date}T00:00:00`);
     const end = new Date(`${date}T23:59:59`);
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = createOrderSchema.parse(body);
 
-    // Buscar tenant pelo slug
     const tenant = await prisma.tenant.findUnique({
       where: { slug: data.tenantSlug },
     });
@@ -58,17 +56,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Marmitaria não encontrada" }, { status: 404 });
     }
 
-    // Se for balcão, exige autenticação
     let createdById: string | undefined;
     if (data.channel === "COUNTER") {
-      const session = await auth();
+      const session = await getServerSession(authOptions);
       if (!session?.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       createdById = session.user.id;
     }
 
-    // Calcular total e verificar produtos
     let totalAmount = 0;
     for (const item of data.items) {
       totalAmount += item.unitPrice * item.quantity;
@@ -108,11 +104,9 @@ export async function POST(req: NextRequest) {
           },
         },
       });
-
       return newOrder;
     });
 
-    // Notificar operadores em tempo real
     notifyTenant(tenant.id, { type: "NEW_ORDER", order });
 
     return NextResponse.json(order, { status: 201 });

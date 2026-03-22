@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 import { adjustStockSchema } from "@/lib/validations";
 
-// GET /api/inventory — estoque do tenant
 export async function GET() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -16,7 +16,12 @@ export async function GET() {
     where: { tenantId: tenant.id },
     include: {
       product: {
-        select: { id: true, name: true, active: true, category: { select: { name: true } } },
+        select: {
+          id: true,
+          name: true,
+          active: true,
+          category: { select: { name: true } },
+        },
       },
       stockMovements: {
         orderBy: { createdAt: "desc" },
@@ -29,9 +34,8 @@ export async function GET() {
   return NextResponse.json(inventory);
 }
 
-// POST /api/inventory — ajustar estoque manualmente
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest) {
     const newQty =
       data.type === "IN"
         ? inventory.quantity + data.quantity
-        : data.quantity; // ADJUST define diretamente
+        : data.quantity;
 
     const inv = await tx.inventoryItem.update({
       where: { id: inventory.id },

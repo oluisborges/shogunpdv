@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 
-// PATCH /api/products/[id] — atualizar produto
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -32,22 +32,17 @@ export async function PATCH(
       imageUrl: body.imageUrl || null,
       active: body.active,
     },
-    include: {
-      variants: true,
-      inventory: true,
-      category: true,
-    },
+    include: { variants: true, inventory: true, category: true },
   });
 
   return NextResponse.json(updated);
 }
 
-// DELETE /api/products/[id] — desativar produto
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const tenant = await getCurrentTenant();
@@ -60,10 +55,7 @@ export async function DELETE(
   });
   if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.product.update({
-    where: { id },
-    data: { active: false },
-  });
+  await prisma.product.update({ where: { id }, data: { active: false } });
 
   return NextResponse.json({ ok: true });
 }

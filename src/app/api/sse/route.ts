@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 
 // Mapa de clientes conectados por tenantId
@@ -20,31 +21,22 @@ export function notifyTenant(tenantId: string, data: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const session = await getServerSession(authOptions);
+  if (!session) return new Response("Unauthorized", { status: 401 });
 
   const tenant = await getCurrentTenant();
-  if (!tenant) {
-    return new Response("Tenant not found", { status: 404 });
-  }
+  if (!tenant) return new Response("Tenant not found", { status: 404 });
 
   const tenantId = tenant.id;
-
   let controller: ReadableStreamDefaultController;
 
   const stream = new ReadableStream({
     start(c) {
       controller = c;
 
-      // Registrar cliente
-      if (!clients.has(tenantId)) {
-        clients.set(tenantId, new Set());
-      }
+      if (!clients.has(tenantId)) clients.set(tenantId, new Set());
       clients.get(tenantId)!.add(controller);
 
-      // Heartbeat a cada 30s
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
@@ -56,9 +48,7 @@ export async function GET(req: NextRequest) {
       req.signal.addEventListener("abort", () => {
         clearInterval(heartbeat);
         clients.get(tenantId)?.delete(controller);
-        try {
-          controller.close();
-        } catch {}
+        try { controller.close(); } catch {}
       });
     },
   });

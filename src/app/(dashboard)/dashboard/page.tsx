@@ -1,3 +1,6 @@
+import { getServerSession } from "next-auth/next";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { OrdersDashboard } from "@/components/dashboard/OrdersDashboard";
@@ -5,10 +8,12 @@ import { OrdersDashboard } from "@/components/dashboard/OrdersDashboard";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+
   const tenant = await getCurrentTenant();
   if (!tenant) return null;
 
-  // Pedidos de hoje
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);

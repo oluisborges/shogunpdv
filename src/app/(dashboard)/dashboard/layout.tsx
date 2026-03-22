@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth/next";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { authOptions } from "@/lib/auth";
 import { getCurrentTenant } from "@/lib/tenant";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
 
@@ -9,7 +10,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const tenant = await getCurrentTenant();
@@ -44,9 +45,7 @@ export default async function DashboardLayout({
       <div className="flex flex-1">
         {/* Sidebar */}
         <nav className="w-52 bg-white border-r border-gray-200 p-4 space-y-1 hidden md:block shrink-0">
-          <NavLink href="/dashboard" exact>
-            Pedidos
-          </NavLink>
+          <NavLink href="/dashboard">Pedidos</NavLink>
           <NavLink href="/dashboard/balcao">Balcão</NavLink>
           <NavLink href="/dashboard/cardapio">Cardápio</NavLink>
           <NavLink href="/dashboard/estoque">Estoque</NavLink>
@@ -56,10 +55,20 @@ export default async function DashboardLayout({
         {/* Mobile nav */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
           <div className="flex">
-            <MobileNavLink href="/dashboard" exact label="Pedidos" />
-            <MobileNavLink href="/dashboard/balcao" label="Balcão" />
-            <MobileNavLink href="/dashboard/cardapio" label="Cardápio" />
-            <MobileNavLink href="/dashboard/estoque" label="Estoque" />
+            {[
+              { href: "/dashboard", label: "Pedidos" },
+              { href: "/dashboard/balcao", label: "Balcão" },
+              { href: "/dashboard/cardapio", label: "Cardápio" },
+              { href: "/dashboard/estoque", label: "Estoque" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex-1 py-3 text-center text-xs text-gray-600 hover:text-orange-500 font-medium"
+              >
+                {item.label}
+              </Link>
+            ))}
           </div>
         </div>
 
@@ -74,11 +83,9 @@ export default async function DashboardLayout({
 
 function NavLink({
   href,
-  exact,
   children,
 }: {
   href: string;
-  exact?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -87,25 +94,6 @@ function NavLink({
       className="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-orange-50 hover:text-orange-600 font-medium transition-colors"
     >
       {children}
-    </Link>
-  );
-}
-
-function MobileNavLink({
-  href,
-  exact,
-  label,
-}: {
-  href: string;
-  exact?: boolean;
-  label: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex-1 py-3 text-center text-xs text-gray-600 hover:text-orange-500 font-medium"
-    >
-      {label}
     </Link>
   );
 }
